@@ -18,6 +18,9 @@ const MemberCard = ({ member }) => (
   <motion.div
     whileHover={{ y: -5 }}
     className="card"
+    data-testid="member-card"
+    role="article"
+    aria-label={`Team member: ${member.name}`}
   >
     <div className="flex items-start space-x-4">
     <img
@@ -33,7 +36,7 @@ const MemberCard = ({ member }) => (
             <p className="text-gray-600">{member.role}</p>
           </div>
           {member.performance >= 90 && (
-            <Star className="text-yellow-400" />
+            <Star className="text-yellow-400" data-testid="star-icon" />
           )}
         </div>
         
