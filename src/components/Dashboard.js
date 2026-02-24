@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
 import { ResponsiveLine } from '@nivo/line';
 import { ResponsivePie } from '@nivo/pie';
@@ -11,8 +11,7 @@ import {
   Warning,
   People,
 } from '@mui/icons-material';
-import { doc, getDoc, getDocs, collection } from 'firebase/firestore';
-import db from '../firebase-config';
+import { useProjectInfo, useAllTasks, useTeamMembers } from '../hooks/useFirestoreData';
 import { showToast } from '../utils/toast';
 
 const MetricCard = ({ icon, title, value, trend }) => (
@@ -33,62 +32,30 @@ const MetricCard = ({ icon, title, value, trend }) => (
 );
 
 const Dashboard = () => {
-  const [projectInfo, setProjectInfo] = useState(null);
-  const [tasks, setTasks] = useState({ completed: [], active: [], pending: [], blocked: [] });
-  const [teamMembers, setTeamMembers] = useState({});
-  const [loading, setLoading] = useState(true);
+  // Optimized data fetching with React Query
+  const { data: projectInfo, isLoading: projectLoading, error: projectError } = useProjectInfo();
+  const { data: tasksData, isLoading: tasksLoading, error: tasksError } = useAllTasks();
+  const { data: teamMembersData, isLoading: teamLoading, error: teamError } = useTeamMembers();
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
+  // Handle errors
+  React.useEffect(() => {
+    if (projectError) {
+      showToast.firebaseError(projectError, 'Failed to load project information');
+    }
+    if (tasksError) {
+      showToast.firebaseError(tasksError, 'Failed to load tasks');
+    }
+    if (teamError) {
+      showToast.firebaseError(teamError, 'Failed to load team members');
+    }
+  }, [projectError, tasksError, teamError]);
 
-      try {
-        // Get project info
-        const projectDoc = await getDoc(doc(db, 'project', 'info'));
-        if (projectDoc.exists()) {
-          setProjectInfo(projectDoc.data());
-        } else {
-          showToast.warning('No project information found');
-        }
+  // Combine loading states
+  const loading = projectLoading || tasksLoading || teamLoading;
 
-        // Get task statuses
-        const statuses = ['completed', 'active', 'pending', 'blocked'];
-        const tasksData = {};
-        
-        for (const status of statuses) {
-          try {
-            const statusDoc = await getDoc(doc(db, 'tasks', status));
-            tasksData[status] = statusDoc.exists() ? statusDoc.data().items || [] : [];
-          } catch (error) {
-            console.error(`Error fetching ${status} tasks:`, error);
-            showToast.firebaseError(error, `Failed to load ${status} tasks`);
-            tasksData[status] = [];
-          }
-        }
-        setTasks(tasksData);
-
-        // Get all team members
-        try {
-          const membersSnapshot = await getDocs(collection(db, 'team_members'));
-          const members = {};
-          membersSnapshot.forEach(doc => {
-            members[doc.id] = doc.data();
-          });
-          setTeamMembers(members);
-        } catch (error) {
-          console.error('Error fetching team members:', error);
-          showToast.firebaseError(error, 'Failed to load team members');
-        }
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-        showToast.firebaseError(error, 'Failed to load dashboard data');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
+  // Use data with fallbacks
+  const tasks = tasksData || { completed: [], active: [], pending: [], blocked: [] };
+  const teamMembers = teamMembersData || {};
 
   const totalTasks =
     tasks.completed.length + tasks.active.length + tasks.pending.length + tasks.blocked.length;

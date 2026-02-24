@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { format, addDays, startOfWeek, isSameDay, isWeekend, parse } from 'date-fns';
 import {
@@ -11,9 +11,10 @@ import {
   Today,
   Close
 } from '@mui/icons-material';
-import { collection, getDocs, doc, setDoc, getDoc } from 'firebase/firestore';
+import { collection, setDoc, doc } from 'firebase/firestore';
 import db from '../firebase-config.js';
 import { showToast } from '../utils/toast';
+import { useTeamMembersList, useAllCalendarEvents } from '../hooks/useFirestoreData';
 
 // Helper to normalize time strings for matching
 const normalizeTime = (t) => {
@@ -73,48 +74,28 @@ const Schedule = () => {
   const [showNewEventModal, setShowNewEventModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState(null);
-  const [teamMembers, setTeamMembers] = useState([]);
-  const [calendarEvents, setCalendarEvents] = useState({});
-  const [loading, setLoading] = useState(true);
   const [selectedMemberId, setSelectedMemberId] = useState(null);
 
-  useEffect(() => {
-    const fetchTeamMembers = async () => {
-      try {
-        const teamMembersRef = collection(db, 'team_members');
-        const snapshot = await getDocs(teamMembersRef);
-        const members = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        setTeamMembers(members);
-        
-        // Fetch calendar events for each team member
-        const events = {};
-        for (const member of members) {
-          try {
-            const calendarRef = doc(db, 'calendar', member.id);
-            const calendarDoc = await getDoc(calendarRef);
-            if (calendarDoc.exists()) {
-              events[member.id] = calendarDoc.data().events || [];
-            }
-          } catch (error) {
-            console.error(`Error fetching calendar for ${member.name}:`, error);
-            showToast.firebaseError(error, `Failed to load calendar for ${member.name}`);
-            events[member.id] = [];
-          }
-        }
-        setCalendarEvents(events);
-      } catch (error) {
-        console.error('Error fetching team data:', error);
-        showToast.firebaseError(error, 'Failed to load team data');
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Optimized data fetching with React Query
+  const { data: teamMembersData, isLoading: teamLoading, error: teamError } = useTeamMembersList();
+  const { data: calendarEventsData, isLoading: calendarLoading, error: calendarError } = useAllCalendarEvents(teamMembersData || []);
 
-    fetchTeamMembers();
-  }, []);
+  // Handle errors
+  React.useEffect(() => {
+    if (teamError) {
+      showToast.firebaseError(teamError, 'Failed to load team members');
+    }
+    if (calendarError) {
+      showToast.firebaseError(calendarError, 'Failed to load calendar events');
+    }
+  }, [teamError, calendarError]);
+
+  // Combine loading states
+  const loading = teamLoading || calendarLoading;
+
+  // Use data with fallbacks
+  const teamMembers = teamMembersData || [];
+  const calendarEvents = calendarEventsData || {};
 
   const weekDays = [...Array(7)]
     .map((_, i) => {

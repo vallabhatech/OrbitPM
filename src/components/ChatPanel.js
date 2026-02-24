@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Close,
@@ -13,12 +13,12 @@ import ReactMarkdown from 'react-markdown';
 import {
   collection,
   addDoc,
-  getDocs,
   deleteDoc,
   doc
 } from 'firebase/firestore';
 import db from '../firebase-config';
 import { showToast } from '../utils/toast';
+import { useChatMessages } from '../hooks/useFirestoreData';
 
 const Message = ({ message, onDelete }) => {
   const safeText = typeof message.text === 'string' ? message.text : String(message.text || '');
@@ -83,26 +83,22 @@ const ChatPanel = () => {
   const [userId] = useState('anonymous');
   const [isExpanded, setIsExpanded] = useState(true);
   const [isMinimized, setIsMinimized] = useState(false);
-  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const fetchMessages = async () => {
-      try {
-        const chatRef = collection(db, 'chats', userId, 'messages');
-        const snapshot = await getDocs(chatRef);
-        const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setMessages(msgs);
-      } catch (error) {
-        console.error('Error fetching chat messages:', error);
-        showToast.firebaseError(error, 'Failed to load chat history');
-      }
-    };
-    fetchMessages();
-  }, [userId]);
-  
+  // Optimized data fetching with React Query
+  const { data: messagesData, isLoading: messagesLoading, error: messagesError } = useChatMessages(userId);
+
+  // Handle errors
+  React.useEffect(() => {
+    if (messagesError) {
+      showToast.firebaseError(messagesError, 'Failed to load chat history');
+    }
+  }, [messagesError]);
+
+  // Use data with fallbacks
+  const messages = messagesData || [];
 
   const handleSend = async () => {
     if (input.trim()) {
