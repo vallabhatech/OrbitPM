@@ -13,6 +13,7 @@ import {
 } from '@mui/icons-material';
 import { collection, getDocs, doc, setDoc, getDoc } from 'firebase/firestore';
 import db from '../firebase-config.js';
+import { showToast } from '../utils/toast';
 
 // Helper to normalize time strings for matching
 const normalizeTime = (t) => {
@@ -91,16 +92,23 @@ const Schedule = () => {
         // Fetch calendar events for each team member
         const events = {};
         for (const member of members) {
-          const calendarRef = doc(db, 'calendar', member.id);
-          const calendarDoc = await getDoc(calendarRef);
-          if (calendarDoc.exists()) {
-            events[member.id] = calendarDoc.data().events || [];
+          try {
+            const calendarRef = doc(db, 'calendar', member.id);
+            const calendarDoc = await getDoc(calendarRef);
+            if (calendarDoc.exists()) {
+              events[member.id] = calendarDoc.data().events || [];
+            }
+          } catch (error) {
+            console.error(`Error fetching calendar for ${member.name}:`, error);
+            showToast.firebaseError(error, `Failed to load calendar for ${member.name}`);
+            events[member.id] = [];
           }
         }
         setCalendarEvents(events);
-        setLoading(false);
       } catch (error) {
         console.error('Error fetching team data:', error);
+        showToast.firebaseError(error, 'Failed to load team data');
+      } finally {
         setLoading(false);
       }
     };
@@ -194,8 +202,10 @@ const Schedule = () => {
       setCalendarEvents(updatedEvents);
       
       setShowNewEventModal(false);
+      showToast.success('Meeting scheduled successfully!');
     } catch (error) {
       console.error('Error creating event:', error);
+      showToast.firebaseError(error, 'Failed to schedule meeting');
     }
   };
 

@@ -18,7 +18,7 @@ import {
   doc
 } from 'firebase/firestore';
 import db from '../firebase-config';
-
+import { showToast } from '../utils/toast';
 
 const Message = ({ message, onDelete }) => {
   const safeText = typeof message.text === 'string' ? message.text : String(message.text || '');
@@ -65,11 +65,15 @@ async function callOrchestrator(message, history = []) {
       }),
     });
 
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    if (!response.ok) {
+      throw new Error(`AI service error: ${response.status} ${response.statusText}`);
+    }
+    
     const data = await response.json();
     return data.responses;
   } catch (error) {
     console.error("Failed to call orchestrator:", error);
+    showToast.aiError(error, 'AI assistant is currently unavailable');
     return null;
   }
 }
@@ -86,10 +90,15 @@ const ChatPanel = () => {
 
   useEffect(() => {
     const fetchMessages = async () => {
-      const chatRef = collection(db, 'chats', userId, 'messages');
-      const snapshot = await getDocs(chatRef);
-      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setMessages(msgs);
+      try {
+        const chatRef = collection(db, 'chats', userId, 'messages');
+        const snapshot = await getDocs(chatRef);
+        const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setMessages(msgs);
+      } catch (error) {
+        console.error('Error fetching chat messages:', error);
+        showToast.firebaseError(error, 'Failed to load chat history');
+      }
     };
     fetchMessages();
   }, [userId]);
@@ -104,7 +113,14 @@ const ChatPanel = () => {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, newMessage]);
-      await addDoc(collection(db, 'chats', userId, 'messages'), newMessage);
+      
+      try {
+        await addDoc(collection(db, 'chats', userId, 'messages'), newMessage);
+      } catch (error) {
+        console.error('Error saving user message:', error);
+        showToast.firebaseError(error, 'Failed to save message');
+      }
+      
       setInput('');
       setLoading(true);
       try {
@@ -116,16 +132,25 @@ const ChatPanel = () => {
           timestamp: new Date()
         };
         setMessages(prev => [...prev, aiResponse]);
-        await addDoc(collection(db, 'chats', userId, 'messages'), aiResponse);
+        
+        try {
+          await addDoc(collection(db, 'chats', userId, 'messages'), aiResponse);
+        } catch (error) {
+          console.error('Error saving AI response:', error);
+          showToast.firebaseError(error, 'Failed to save AI response');
+        }
       } catch (err) {
-        setMessages(prev => [...prev, {
+        console.error('Error in AI response handling:', err);
+        const errorResponse = {
           id: Date.now() + 2,
-          text: 'Error: Could not reach the assistant API.',
+          text: 'Error: Could not reach the assistant API. Please try again later.',
           sender: 'bot',
           timestamp: new Date()
-        }]);
+        };
+        setMessages(prev => [...prev, errorResponse]);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
   };
 
@@ -141,13 +166,19 @@ const ChatPanel = () => {
   };
 
   const handleClearChat = async () => {
-    const querySnapshot = await getDocs(collection(db, 'chats', userId, 'messages'));
-    const deletions = querySnapshot.docs.map((docSnap) =>
-      deleteDoc(doc(db, 'chats', userId, 'messages', docSnap.id))
-    );
-    await Promise.all(deletions);
-    setMessages([]);
-    setIsSettingsOpen(false);
+    try {
+      const querySnapshot = await getDocs(collection(db, 'chats', userId, 'messages'));
+      const deletions = querySnapshot.docs.map((docSnap) =>
+        deleteDoc(doc(db, 'chats', userId, 'messages', docSnap.id))
+      );
+      await Promise.all(deletions);
+      setMessages([]);
+      setIsSettingsOpen(false);
+      showToast.success('Chat history cleared successfully');
+    } catch (error) {
+      console.error('Error clearing chat:', error);
+      showToast.firebaseError(error, 'Failed to clear chat history');
+    }
   };
   
 

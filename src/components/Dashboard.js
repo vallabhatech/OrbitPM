@@ -13,6 +13,7 @@ import {
 } from '@mui/icons-material';
 import { doc, getDoc, getDocs, collection } from 'firebase/firestore';
 import db from '../firebase-config';
+import { showToast } from '../utils/toast';
 
 const MetricCard = ({ icon, title, value, trend }) => (
   <motion.div whileHover={{ y: -5 }} className="card">
@@ -41,28 +42,49 @@ const Dashboard = () => {
     const fetchData = async () => {
       setLoading(true);
 
-      // Get project info
-      const projectDoc = await getDoc(doc(db, 'project', 'info'));
-      if (projectDoc.exists()) setProjectInfo(projectDoc.data());
+      try {
+        // Get project info
+        const projectDoc = await getDoc(doc(db, 'project', 'info'));
+        if (projectDoc.exists()) {
+          setProjectInfo(projectDoc.data());
+        } else {
+          showToast.warning('No project information found');
+        }
 
-      // Get task statuses
-      const statuses = ['completed', 'active', 'pending', 'blocked'];
-      const tasksData = {};
-      for (const status of statuses) {
-        const statusDoc = await getDoc(doc(db, 'tasks', status));
-        tasksData[status] = statusDoc.exists() ? statusDoc.data().items || [] : [];
+        // Get task statuses
+        const statuses = ['completed', 'active', 'pending', 'blocked'];
+        const tasksData = {};
+        
+        for (const status of statuses) {
+          try {
+            const statusDoc = await getDoc(doc(db, 'tasks', status));
+            tasksData[status] = statusDoc.exists() ? statusDoc.data().items || [] : [];
+          } catch (error) {
+            console.error(`Error fetching ${status} tasks:`, error);
+            showToast.firebaseError(error, `Failed to load ${status} tasks`);
+            tasksData[status] = [];
+          }
+        }
+        setTasks(tasksData);
+
+        // Get all team members
+        try {
+          const membersSnapshot = await getDocs(collection(db, 'team_members'));
+          const members = {};
+          membersSnapshot.forEach(doc => {
+            members[doc.id] = doc.data();
+          });
+          setTeamMembers(members);
+        } catch (error) {
+          console.error('Error fetching team members:', error);
+          showToast.firebaseError(error, 'Failed to load team members');
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        showToast.firebaseError(error, 'Failed to load dashboard data');
+      } finally {
+        setLoading(false);
       }
-      setTasks(tasksData);
-
-      // Get all team members
-      const membersSnapshot = await getDocs(collection(db, 'team_members'));
-      const members = {};
-      membersSnapshot.forEach(doc => {
-        members[doc.id] = doc.data();
-      });
-      setTeamMembers(members);
-
-      setLoading(false);
     };
 
     fetchData();
