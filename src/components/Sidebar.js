@@ -10,17 +10,25 @@ import { useNavigate, useLocation } from 'react-router-dom';
 
 const SidebarIcon = ({ icon, text, active, onClick }) => {
   return (
-    <div className="relative group" onClick={onClick}>
+    <button
+      className="relative group"
+      onClick={onClick}
+      aria-label={`Navigate to ${text}`}
+      aria-current={active ? 'page' : undefined}
+      tabIndex={0}
+    >
       <motion.div
         whileHover={{ scale: 1.1 }}
         className={`sidebar-icon ${active ? 'bg-green-600 text-white' : ''}`}
+        role="button"
+        tabIndex={-1}
       >
         {icon}
       </motion.div>
-      <span className="sidebar-tooltip group-hover:scale-100">
+      <span className="sidebar-tooltip group-hover:scale-100" role="tooltip">
         {text}
       </span>
-    </div>
+    </button>
   );
 };
 
@@ -36,9 +44,9 @@ const Sidebar = () => {
   ];
 
   return (
-    <motion.div
-      initial={{ width: 0 }}
-      animate={{ width: 'auto' }}
+    <nav
+      role="navigation"
+      aria-label="Main navigation"
       className="fixed left-0 top-0 h-screen w-16 m-0 flex flex-col
                 bg-gray-900 text-white shadow-lg z-40"
     >
@@ -53,8 +61,8 @@ const Sidebar = () => {
           />
         ))}
       </div>
-    </motion.div>
+    </nav>
   );
 };
 
-export default Sidebar; 
+export default Sidebar;

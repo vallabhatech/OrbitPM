@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { format, addDays, startOfWeek, isSameDay, isWeekend, parse } from 'date-fns';
 import {
@@ -32,9 +32,8 @@ const TimeSlot = ({ time, events, isCurrentDay, onClick }) => {
   const event = events?.find(e => normalizeTime(e.time) === normalizeTime(time));
   
   return (
-    <motion.div
-      whileHover={{ scale: 1.01 }}
-      className={`p-2 rounded-lg mb-1 text-sm ${
+    <button
+      className={`p-2 rounded-lg mb-1 text-sm w-full text-left ${
         event 
           ? 'bg-blue-50 border-l-4 border-blue-500' 
           : isCurrentDay 
@@ -42,6 +41,8 @@ const TimeSlot = ({ time, events, isCurrentDay, onClick }) => {
             : 'bg-transparent cursor-pointer hover:bg-gray-50'
       }`}
       onClick={() => onClick(time, event)}
+      aria-label={`${time} - ${event ? event.event : 'Available slot'}`}
+      tabIndex={0}
     >
       <div className="flex items-center justify-between">
         <span className="text-gray-500 text-xs w-16">{time}</span>
@@ -51,12 +52,12 @@ const TimeSlot = ({ time, events, isCurrentDay, onClick }) => {
             {event.attendees && (
               <div className="flex items-center text-xs text-gray-500 mt-1 flex-wrap">
                 <div className="flex items-center mr-3">
-                  <People className="w-3 h-3 mr-1" />
+                  <People className="w-3 h-3 mr-1" aria-hidden="true" />
                   <span>{event.attendees}</span>
                 </div>
                 {event.location && (
                   <div className="flex items-center">
-                    <Room className="w-3 h-3 mr-1" />
+                    <Room className="w-3 h-3 mr-1" aria-hidden="true" />
                     <span>{event.location}</span>
                   </div>
                 )}
@@ -65,7 +66,7 @@ const TimeSlot = ({ time, events, isCurrentDay, onClick }) => {
           </div>
         )}
       </div>
-    </motion.div>
+    </button>
   );
 };
 
@@ -81,7 +82,7 @@ const Schedule = () => {
   const { data: calendarEventsData, isLoading: calendarLoading, error: calendarError } = useAllCalendarEvents(teamMembersData || []);
 
   // Handle errors
-  React.useEffect(() => {
+  useEffect(() => {
     if (teamError) {
       showToast.firebaseError(teamError, 'Failed to load team members');
     }
@@ -89,6 +90,18 @@ const Schedule = () => {
       showToast.firebaseError(calendarError, 'Failed to load calendar events');
     }
   }, [teamError, calendarError]);
+
+  // Add keyboard navigation and focus management
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && showNewEventModal) {
+        setShowNewEventModal(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showNewEventModal]);
 
   // Combine loading states
   const loading = teamLoading || calendarLoading;
@@ -180,8 +193,7 @@ const Schedule = () => {
         updatedEvents[eventData.userId] = [];
       }
       updatedEvents[eventData.userId].push(newEvent);
-      setCalendarEvents(updatedEvents);
-      
+      // setCalendarEvents(updatedEvents); // Removed this line
       setShowNewEventModal(false);
       showToast.success('Meeting scheduled successfully!');
     } catch (error) {
@@ -199,13 +211,15 @@ const Schedule = () => {
   }
 
   return (
-    <div className="flex">
+    <main className="flex">
       {/* Sidebar for team members */}
-      <div className="w-48 bg-white border-r border-gray-200 py-6 px-2 mr-4 rounded-xl h-fit self-start sticky top-8">
+      <aside className="w-48 bg-white border-r border-gray-200 py-6 px-2 mr-4 rounded-xl h-fit self-start sticky top-8">
         <h3 className="text-lg font-semibold mb-4 text-gray-700">Team Members</h3>
         <button
           className={`block w-full text-left px-3 py-2 mb-2 rounded-lg font-medium ${!selectedMemberId ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-100'}`}
           onClick={() => setSelectedMemberId(null)}
+          aria-label="Show all team members"
+          tabIndex={0}
         >
           Show All
         </button>
@@ -214,22 +228,24 @@ const Schedule = () => {
             key={member.id}
             className={`block w-full text-left px-3 py-2 mb-2 rounded-lg font-medium ${selectedMemberId === member.id ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'}`}
             onClick={() => setSelectedMemberId(member.id)}
+            aria-label={`Filter by ${member.name}`}
+            tabIndex={0}
           >
             {member.name}
           </button>
         ))}
-      </div>
+      </aside>
       {/* Main calendar content */}
-      <div className="flex-1">
+      <section className="flex-1">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
           className="max-w-[1000px] mx-auto pr-200"
         >
-          <div className="flex justify-between items-center mb-6">
+          <header className="flex justify-between items-center mb-6">
             <div className="flex items-center">
-              <Today className="text-blue-500 mr-3 w-8 h-8" />
+              <Today className="text-blue-500 mr-3 w-8 h-8" aria-hidden="true" />
               <div>
                 <h1 className="text-2xl font-bold text-gray-800">Team Schedule</h1>
                 <p className="text-gray-500 text-sm">{format(currentDate, 'MMMM yyyy')}</p>
@@ -241,6 +257,8 @@ const Schedule = () => {
                 whileTap={{ scale: 0.95 }}
                 className="p-1.5 rounded-full bg-gray-100 hover:bg-gray-200"
                 onClick={() => setCurrentDate(addDays(currentDate, -7))}
+                aria-label="Previous week"
+                tabIndex={0}
               >
                 <ChevronLeft className="w-5 h-5" />
               </motion.button>
@@ -249,6 +267,8 @@ const Schedule = () => {
                 whileTap={{ scale: 0.95 }}
                 className="p-1.5 rounded-full bg-gray-100 hover:bg-gray-200"
                 onClick={() => setCurrentDate(addDays(currentDate, 7))}
+                aria-label="Next week"
+                tabIndex={0}
               >
                 <ChevronRight className="w-5 h-5" />
               </motion.button>
@@ -257,12 +277,14 @@ const Schedule = () => {
                 whileTap={{ scale: 0.95 }}
                 className="flex items-center px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm"
                 onClick={() => setShowNewEventModal(true)}
+                aria-label="Schedule new meeting"
+                tabIndex={0}
               >
                 <Add className="w-4 h-4 mr-1" />
                 New Meeting
               </motion.button>
             </div>
-          </div>
+          </header>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-100">
             {/* Calendar Header */}
@@ -310,17 +332,24 @@ const Schedule = () => {
 
           {/* New Meeting Modal */}
           {showNewEventModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+            <div 
+              className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="modal-title"
+            >
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 className="bg-white p-6 rounded-xl w-[480px] shadow-xl"
               >
                 <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-xl font-semibold text-gray-800">Schedule New Meeting</h2>
+                  <h2 id="modal-title" className="text-xl font-semibold text-gray-800">Schedule New Meeting</h2>
                   <button
                     className="text-gray-400 hover:text-gray-600"
                     onClick={() => setShowNewEventModal(false)}
+                    aria-label="Close modal"
+                    tabIndex={0}
                   >
                     <Close className="w-5 h-5" />
                   </button>
@@ -435,9 +464,8 @@ const Schedule = () => {
             </div>
           )}
         </motion.div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
-};
 
-export default Schedule; 
+export default Schedule;
