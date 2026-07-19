@@ -298,8 +298,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### Contact
 - **Maintainer**: Vallabha Tech
-- **Email**: support@vallabhatech.com
-- **Website**: https://vallabhatech.com
+- **Email**: vallabha1243@gmail.com   
+- **Website**: https://vallabha.me
 
 ---
 
